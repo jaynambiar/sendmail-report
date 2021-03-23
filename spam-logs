@@ -1,0 +1,59 @@
+#!/bin/bash
+rday=`date --date='1 days ago' "+%b %e"`
+rdayyear=`date --date='1 days ago' "+%b %e %Y"`
+dayyear=`date --date='1 days ago' "+%e%b%Y"`
+
+
+### SPAM REPORTS
+rm  /tmp/spam-ids
+fgrep stat=Blocked /var/log/mail.log /var/log/mail.log.1 | fgrep "$rday" | awk '{print $6}' | tr -d : | sort | uniq > /tmp/spam-ids 
+
+rm /tmp/spam-report
+for i in `cat /tmp/spam-ids`
+do
+spam=`fgrep $i /var/log/mail.log /var/log/mail.log.1 | head -1 | egrep -o -e "\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}]"|tr -d [ | tr -d ]` 
+echo $i $spam >> /tmp/spam-report
+done
+
+rm /tmp/spammers
+awk '{ print $2}' /tmp/spam-report | sort | uniq > /tmp/spammers
+
+rm /tmp/report
+for j in `cat /tmp/spammers`
+do
+number=`fgrep $j /tmp/spam-report | wc -l`
+echo -e "$j\t$number" >> /tmp/report
+done
+
+rm /tmp/mail-report
+echo "Spam report for $rday" >  /tmp/mail-report
+sort -r -nk 2 /tmp/report >> /tmp/mail-report
+
+###VIRUS REPORTS
+rm /tmp/virus-ids
+fgrep "X-Virus-Status: Infected" /var/log/mail.log /var/log/mail.log.1 | fgrep "$rday" | awk '{print $6}' | tr -d : > /tmp/virus-ids
+
+rm /tmp/virus-report
+for i in `cat /tmp/virus-ids`
+do
+virus=`fgrep $i /var/log/mail.log /var/log/mail.log.1 | head -1 |egrep -o -e "\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}]"|tr -d [ | tr -d ]`
+echo $i $virus >> /tmp/virus-report
+done
+
+rm /tmp/vir-senders
+awk '{ print $2}' /tmp/virus-report | sort | uniq > /tmp/vir-senders
+
+rm /tmp/vir-report
+for j in `cat /tmp/vir-senders`
+do
+number=`fgrep $j /tmp/virus-report | wc -l`
+echo -e "$j\t$number" >> /tmp/vir-report
+done
+
+echo -e "\n\r" >> /tmp/mail-report
+echo "Virus report for $rday" >>  /tmp/mail-report
+sort -r -nk 2 /tmp/vir-report >> /tmp/mail-report
+
+cp /tmp/mail-report /home/mum/spam-reports/$dayyear 
+
+cat /tmp/mail-report | mutt -s "MailServer: Spam and Virus Report-$rdayyear" it@domain.in
